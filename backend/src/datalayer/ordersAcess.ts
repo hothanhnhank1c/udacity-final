@@ -2,35 +2,36 @@ import * as AWS from 'aws-sdk'
 import * as AWSXRay from 'aws-xray-sdk'
 import { DeleteItemInput, PutItemInput, QueryInput, UpdateItemInput } from 'aws-sdk/clients/dynamodb'
 import { createLogger } from '../utils/logger'
-import { TodoItem } from '../models/TodoItem'
-import { TodoUpdate } from '../models/TodoUpdate';
-import { CreateTodoRequest } from '../requests/CreateTodoRequest'
-import { UpdateTodoRequest } from '../requests/UpdateTodoRequest'
+import { OrderItem } from '../models/OrderItem'
+import { OrderUpdate } from '../models/OrderUpdate';
+import { CreateOrderRequest } from '../requests/CreateOrderRequest'
+import { UpdateOrderRequest } from '../requests/UpdateOrderRequest'
 import { v4 as uuidv4 } from 'uuid';
+import { Result } from '../models/Result'
 const XAWS = AWSXRay.captureAWS(AWS);
 const S3 = new XAWS.S3({
   signatureVersion: 'v4'
 });
 const urlExpiration = process.env.SIGNED_URL_EXPIRATION;
-const logger = createLogger('TodosAccess');
+const logger = createLogger('ordersAccess');
 // const isOffline = process.env.IS_OFFLINE;
 
-export class TodosAccess {
+export class OrdersAccess {
 
 
   constructor(
     private readonly docClient = createDynamoDBClient(),
-    private readonly todoTable = process.env.TODOS_TABLE,
+    private readonly orderTable = process.env.ORDERS_TABLE,
     private readonly bucketName = process.env.ATTACHMENT_S3_BUCKET
   ) { }
   /**
-   * Get a todos from user
+   * Get a orders from user
    * @param event an event from API Gateway
    *
    * @returns a user id from a JWT token
    */
-  async getTodosForUser(userId: string, toDoName?: string): Promise<TodoItem[]> {
-    logger.info('Query all todos' + userId);
+  async getOrdersForUser(userId: string, orderName: string , limit: number, nextKey: any, ): Promise<Result> {
+    logger.info('Query all orders' + userId);
     const param: QueryInput = {
       KeyConditions: {
         "userId": {
@@ -40,84 +41,86 @@ export class TodosAccess {
           ComparisonOperator: "EQ"
         }
       },
-
-      TableName: this.todoTable,
+      Limit: limit,
+      ExclusiveStartKey: nextKey,
+      TableName: this.orderTable,
     }
-    if (toDoName && toDoName.trim() != '') {
+    if (orderName && orderName.trim() != '') {
       param.ExpressionAttributeValues = {
-        ':todoName': { S: toDoName }
+        ':orderName': { S: orderName }
       };
       param.ExpressionAttributeNames = {
         "#name": "name"
       }
-      param.FilterExpression = 'contains (#name, :todoName)';
+      param.FilterExpression = 'contains (#name, :orderName)';
     }
     try {
       const result = await this.docClient.query(param).promise();
       logger.info('response query', result);
-      const todos = result.Items.map(data => {
+      const {LastEvaluatedKey, Items} = result;
+      const orders = Items.map(data => {
         return {
           name: AWS.DynamoDB.Converter.output(data["name"]),
           createdAt: AWS.DynamoDB.Converter.output(data["createdAt"]),
-          todoId: AWS.DynamoDB.Converter.output(data["todoId"]),
+          orderId: AWS.DynamoDB.Converter.output(data["orderId"]),
           dueDate: AWS.DynamoDB.Converter.output(data["dueDate"]),
-          done: AWS.DynamoDB.Converter.output(data["done"]),
           attachmentUrl: AWS.DynamoDB.Converter.output(data["attachmentUrl"]),
+          description:AWS.DynamoDB.Converter.output(data["description"])
         };
       })
-      return todos as TodoItem[];
+      return {
+        nextKey: LastEvaluatedKey? encodeURIComponent(JSON.stringify(LastEvaluatedKey)):null,
+        orders: orders as OrderItem[]
+      };
     } catch (error) {
       logger.error
         ('error query: ', error);
-      return [];
+      return {nextKey:'',orders:[]};
     }
 
   }
 
   /**
-   * Get a todos from user
+   * Get a orders from user
    * @param event an event from API Gateway
    *
    * @returns a user id from a JWT token
    */
-  async createTodo(userId: string, createTodoRequest: CreateTodoRequest): Promise<any> {
-    console.log('Create todo', createTodoRequest);
+  async createOrder(userId: string, createOrderRequest: CreateOrderRequest): Promise<any> {
+    console.log('Create order', createOrderRequest);
     const createAt = new Date()
-    const todoId = uuidv4()
+    const orderId = uuidv4()
     const param: PutItemInput = {
       Item: {
         "createdAt": { "S": createAt.toUTCString() },
-        "name": { "S": createTodoRequest.name },
-        "dueDate": { "S": createTodoRequest.dueDate },
-        "attachmentUrl": { "S": createTodoRequest.attachmentUrl ?? '' },
+        "name": { "S": createOrderRequest.name },
+        "attachmentUrl": { "S": createOrderRequest.attachmentUrl ?? '' },
         "userId": { "S": userId },
-        "todoId": { "S": todoId },
+        "description":{"S":createOrderRequest.description ?? ''},
+        "orderId": { "S": orderId },
         "done": { "BOOL": false }
       },
-      TableName: this.todoTable
+      TableName: this.orderTable
     }
     await this.docClient.putItem(param).promise();
     return {
-      name: createTodoRequest.name,
-      createdAt: createAt.toUTCString(),
-      todoId: todoId,
-      dueDate: createTodoRequest.dueDate,
-      done: false
-    } as TodoItem;
+      name: createOrderRequest.name,
+      orderId: orderId
+    } as OrderItem;
   }
 
   /**
-   * Update a todo By Key
+   * Update a order By Key
    * @param event an event from API Gateway
    *
-   * @returns Todo 
+   * @returns order 
    */
-  async updateTodo(userId: string, todoId: string, updateTodoRequest: UpdateTodoRequest): Promise<TodoUpdate> {
-    logger.info('data update', updateTodoRequest);
+  async updateOrder(userId: string, orderId: string, updateorderRequest: UpdateOrderRequest): Promise<OrderUpdate> {
+    logger.info('data update', updateorderRequest);
     const param: UpdateItemInput = {
       Key: {
-        "todoId": {
-          "S": todoId
+        "orderId": {
+          "S": orderId
         },
         "userId": {
           "S": userId
@@ -126,76 +129,67 @@ export class TodosAccess {
       AttributeUpdates: {
         "name": {
           "Value": {
-            "S": updateTodoRequest.name
-          }
-        },
-        "dueDate": {
-          "Value": {
-            "S": updateTodoRequest.dueDate
-          }
-        },
-        "done": {
-          "Value": {
-            "BOOL": updateTodoRequest.done
+            "S": updateorderRequest.name
           }
         },
         "attachmentUrl": {
           "Value": {
-            "S": updateTodoRequest.attachmentUrl ?? ''
+            "S": updateorderRequest.attachmentUrl ?? ''
           }
-        }
+        },
+        "description":{"Value":{"S":updateorderRequest.description ?? ''}},
       },
-      TableName: this.todoTable
+      TableName: this.orderTable
     }
     const result = await this.docClient.updateItem(param).promise();
-    logger.info('ressponse after update', updateTodoRequest);
-    return result.$response.data as TodoUpdate;
+    logger.info('ressponse after update', updateorderRequest);
+    return result.$response.data as OrderUpdate;
   }
 
 
   /**
-   * Delete a todo By Key
+   * Delete a order By Key
    * @param event an event from API Gateway
    *
-   * @returns Todo 
+   * @returns order 
    */
-  async deleteTodo(userId: string, todoId: string): Promise<string> {
+  async deleteOrder(userId: string, orderId: string): Promise<string> {
 
     const param: DeleteItemInput = {
       Key: {
-        "todoId": {
-          "S": todoId
+        "orderId": {
+          "S": orderId
         },
         "userId": {
           "S": userId
         }
       },
-      TableName: this.todoTable
+      TableName: this.orderTable
     }
     await this.docClient.deleteItem(param).promise();
     return '';
   }
 
   /**
-   * Delete a todo By Key
+   * Delete a order By Key
    * @param event an event from API Gateway
    *
-   * @returns Todo 
+   * @returns order 
    */
-  async createAttachmentPresignedUrl(userId: string, todoId: string): Promise<string> {
+  async createAttachmentPresignedUrl(userId: string, orderId: string): Promise<string> {
     logger.info('get URL updload' + userId);
     try {
 
       let attachmentUrl = S3.getSignedUrl('putObject', {
         Bucket: this.bucketName,
-        Key: todoId,
+        Key: orderId,
         Expires: Number(urlExpiration)
       });
       logger.info('url ' + attachmentUrl);
       const param: UpdateItemInput = {
         Key: {
-          "todoId": {
-            "S": todoId
+          "orderId": {
+            "S": orderId
           },
           "userId": {
             "S": userId
@@ -205,11 +199,11 @@ export class TodosAccess {
 
           "attachmentUrl": {
             "Value": {
-              "S": `https://${this.bucketName}.s3.amazonaws.com/${todoId}`
+              "S": `https://${this.bucketName}.s3.amazonaws.com/${orderId}`
             }
           }
         },
-        TableName: this.todoTable
+        TableName: this.orderTable
       }
       await this.docClient.updateItem(param).promise();
       return attachmentUrl;

@@ -3,31 +3,21 @@
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "title": "The Root Schema",
-    "required": ["createdAt", "name"],
+    "required": ["name"],
     "properties": {
-      "createdAt": {
-        "type": "string",
-        "title": "createdAt",
-        "default": ""
-      },
       "name": {
         "type": "string",
         "title": "name",
         "default": "",
         "pattern": "^(?!\\s*$).+"
       },
-      "dueDate": {
+      "description": {
         "type": "string",
-        "title": "dueDate",
-        "default": ""
-      },
-      "done": {
-        "type": "boolean",
-        "title": "done",
+        "title": "description",
         "default": ""
       },
       "attachmentUrl": {
-        "type": "boolean",
+        "type": "string",
         "title": "attachmentUrl",
         "default": ""
       }

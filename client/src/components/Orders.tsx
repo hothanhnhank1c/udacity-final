@@ -13,9 +13,10 @@ import {
   Icon
 } from 'semantic-ui-react'
 
-import { createTodo, deleteTodo, getTodos, getUploadUrl, patchTodo, uploadFile } from '../api/todos-api'
+import { createOrder, deleteOrder, getOrders, getUploadUrl, patchOrder, uploadFile } from '../api/orders-api'
 import Auth from '../auth/Auth'
-import { Todo } from '../types/Todo'
+import { Order } from '../types/Order'
+import TextArea from 'antd/lib/input/TextArea';
 const { Search } = Input;
 interface TodosProps {
   auth: Auth
@@ -26,121 +27,144 @@ enum UploadState {
   FetchingPresignedUrl,
   UploadingFile,
 }
-interface TodosState {
-  todos: Todo[]
-  newTodoName: string
+interface OrdersState {
+  orders: Order[]
+  newOrderName: string
   loadingTodos: boolean,
   isModalOpen: boolean,
   openUpload: boolean,
+  openEdit: boolean,
+  description: string,
   status: '' | 'error',
-  currTodo: Todo | null,
+  currTodo: any,
   file: any,
-  uploadState: UploadState
+  uploadState: UploadState,
+  title:string
 }
 
-export class Todos extends React.PureComponent<TodosProps, TodosState> {
-  state: TodosState = {
-    todos: [],
-    newTodoName: '',
+export class Todos extends React.PureComponent<TodosProps, OrdersState> {
+  state: OrdersState = {
+    orders: [],
+    newOrderName: '',
     loadingTodos: true,
     isModalOpen: false,
     status: '',
+    description: '',
     openUpload: false,
+    openEdit: false,
     currTodo: null,
     file: null,
-    uploadState: UploadState.NoUpload
+    uploadState: UploadState.NoUpload,
+    title:''
   }
-
+  constructor(props: TodosProps){
+    super(props);
+    this.setUploadState = this.setUploadState.bind(this);
+    this.handleCancelUpload = this.handleCancelUpload.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+    this.handleFileChange = this.handleFileChange.bind(this);
+    this.onSearch = this.onSearch.bind(this);
+    this.handleOk = this.handleOk.bind(this);
+    this.showFormNewTaks = this.showFormNewTaks.bind(this);
+    this.onTodoDelete = this.onTodoDelete.bind(this);
+    this.onEditButtonClick = this.onEditButtonClick.bind(this);
+    this.onUploadButtonClick = this.onUploadButtonClick.bind(this);
+    this.handleNameChange = this.handleNameChange.bind(this);
+    this.onUploadButtonClick = this.onUploadButtonClick.bind(this);
+  }
   handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ status: '', newTodoName: event.target.value })
+    this.setState({ status: '', newOrderName: event.target.value })
   }
 
-  onEditButtonClick = (todo: Todo) => {
-    this.setState({ currTodo: todo, openUpload: true });
-    // this.props.history.push(`/todos/${todo.todoId}/edit`)
+  onUploadButtonClick = (order: Order) => {
+    this.setState({ currTodo: order, openUpload: true });
+  }
+  onEditButtonClick = (order: Order) => {
+    this.setState({title:'Edit Order', currTodo: order, openEdit: true, description: order.description, newOrderName: order.name });
   }
 
-  onTodoDelete = async (todoId: string) => {
+  onTodoDelete = async (orderId: string) => {
     try {
-      await deleteTodo(this.props.auth.getIdToken(), todoId)
+      await deleteOrder(this.props.auth.getIdToken(), orderId)
       this.setState({
-        todos: this.state.todos.filter(todo => todo.todoId !== todoId)
+        orders: this.state.orders.filter(todo => todo.orderId !== orderId)
       })
     } catch {
       alert('Todo deletion failed')
     }
   }
-
-  onTodoCheck = async (pos: number) => {
-    try {
-      const todo = this.state.todos[pos]
-      await patchTodo(this.props.auth.getIdToken(), todo.todoId, {
-        name: todo.name,
-        dueDate: todo.dueDate,
-        done: !todo.done
-      })
-      this.setState({
-        todos: update(this.state.todos, {
-          [pos]: { done: { $set: !todo.done } }
-        })
-      })
-    } catch {
-      alert('Todo deletion failed')
-    }
-  }
+  
 
   async componentDidMount() {
     try {
-      const todos = await getTodos(this.props.auth.getIdToken())
+      const orders = await getOrders(this.props.auth.getIdToken())
       this.setState({
-        todos,
+        orders,
         loadingTodos: false
       })
     } catch (e: any) {
-      message.error(`Failed to fetch todos: ${e.message}`);
+      message.error(`Failed to fetch orders: ${e.message}`);
     }
   }
+  
   showFormNewTaks = async () => {
 
     this.setState({
-      isModalOpen: true
+      isModalOpen: true,
+      title:'New Order'
     })
   };
   handleOk = async () => {
     this.setState({
       loadingTodos: true
     })
-    if (this.state.newTodoName == null || this.state.newTodoName.trim() === '') {
+    if (this.state.newOrderName == null || this.state.newOrderName.trim() === '') {
       this.setState({ status: 'error' })
       message.error('Please enter task name');
-
       return;
     }
-    const dueDate = this.calculateDueDate()
-    const newTodo = await createTodo(this.props.auth.getIdToken(), {
-      name: this.state.newTodoName,
-      dueDate
-    })
-    this.setState({
-      todos: [...this.state.todos, newTodo],
-      newTodoName: '',
-      isModalOpen: false,
-      loadingTodos: false
-    })
+    if (this.state.openEdit) {
+      await patchOrder(this.props.auth.getIdToken(), this.state.currTodo.orderId, {name:this.state.newOrderName, description:this.state.description,attachmentUrl:this.state.currTodo.attachmentUrl})
+      const orders = await getOrders(this.props.auth.getIdToken())
+      this.setState({
+        orders: [...orders],
+        newOrderName: '',
+        isModalOpen: false,
+        loadingTodos: false,
+        openEdit: false
+      })
+    } else {
+      const dueDate = this.calculateDueDate()
+      const newTodo = await createOrder(this.props.auth.getIdToken(), {
+        name: this.state.newOrderName,
+        dueDate
+      });
+      this.setState({
+        orders: [...this.state.orders, newTodo],
+        newOrderName: '',
+        isModalOpen: false,
+        loadingTodos: false,
+        openEdit: false
+      })
+    }
+
+
 
   }
 
   handleCancel = () => {
     this.setState({
-      newTodoName: '',
-      isModalOpen: false
+      newOrderName: '',
+      description:'',
+      isModalOpen: false,
+      openEdit: false
     })
   }
   onSearch = async (value: string) => {
     try {
-      const todos = await getTodos(this.props.auth.getIdToken(), value)
+      const orders = await getOrders(this.props.auth.getIdToken(), value)
       this.setState({
-        todos,
+        orders,
         loadingTodos: false
       })
     } catch (e: any) {
@@ -167,13 +191,13 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
       }
 
       this.setUploadState(UploadState.FetchingPresignedUrl)
-      const uploadUrl = await getUploadUrl(this.props.auth.getIdToken(), this.state.currTodo?.todoId)
+      const uploadUrl = await getUploadUrl(this.props.auth.getIdToken(), this.state.currTodo?.orderId)
 
       this.setUploadState(UploadState.UploadingFile)
       await uploadFile(uploadUrl, this.state.file);
-      const todos = await getTodos(this.props.auth.getIdToken())
+      const orders = await getOrders(this.props.auth.getIdToken())
       this.setState({
-        todos
+        orders
       })
       message.success('File was uploaded!');
     } catch (e: any) {
@@ -192,6 +216,7 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
       uploadState
     })
   }
+
   renderButton() {
 
     return (
@@ -211,7 +236,7 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
     return (
       <div>
         <Spin spinning={this.state.loadingTodos} tip="Loading..." size='large'>
-          <Header as="h1">TODOs</Header>
+          <Header as="h1">ORDERS</Header>
 
           {this.renderCreateTodoInput()}
 
@@ -233,17 +258,25 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
           onSearch={this.onSearch}
         />
         <Button type="primary" onClick={this.showFormNewTaks}>
-          New Task
+          New Order
         </Button>
-        <Modal title="New Task" open={this.state.isModalOpen} onOk={this.handleOk} onCancel={this.handleCancel}>
+        <Modal title ={this.state.title} open={this.state.isModalOpen || this.state.openEdit} onOk={this.handleOk} onCancel={this.handleCancel}>
+        <label >Order name</label>
           <Input
-            placeholder="Enter your task name"
+            placeholder="Enter your order name"
             prefix={<UserOutlined className="site-form-item-icon" />}
             allowClear={true}
-            value={this.state.newTodoName}
+            value={this.state.newOrderName}
             onChange={this.handleNameChange}
             status={this.state.status}
           />
+          <label >Description</label>
+          <TextArea
+            placeholder="Enter description"
+            allowClear={true}
+            value={this.state.description}
+            onChange={e => { this.setState({ description: e.target.value }) }}
+          ></TextArea>
         </Modal>
         <Modal title="Upload file" open={this.state.openUpload} onOk={this.handleSubmit} onCancel={this.handleCancelUpload}>
           <Space direction="vertical" size="small" style={{ display: 'flex' }}>
@@ -272,33 +305,36 @@ export class Todos extends React.PureComponent<TodosProps, TodosState> {
     return (
       <Grid padded>
 
-        {this.state.todos?.map((todo, pos) => {
+        {this.state.orders?.map((todo, pos) => {
           return (
-            <Grid.Row key={todo.todoId}>
+            <Grid.Row key={todo.orderId}>
               <Card title={todo.name} style={{ width: 500 }}
                 cover={todo.attachmentUrl && <img alt="image" src={todo.attachmentUrl} />}
 
               >
                 <Space size="small" style={{ display: 'flex' }}>
-                  <Checkbox
-                    onChange={() => this.onTodoCheck(pos)}
-                    checked={todo.done}
-                  />
+                  <TextArea value={todo.description} readOnly={true}></TextArea>
 
-                  DueDate: {todo.dueDate}
+
+                  <Button
+                    icon
+                    color="blue"
+                    onClick={() => this.onUploadButtonClick(todo)}
+                  >
+                    <UploadOutlined />
+                  </Button>
                   <Button
                     icon
                     color="blue"
                     onClick={() => this.onEditButtonClick(todo)}
                   >
+
                     <EditTwoTone />
                   </Button>
-
-                  <Popconfirm title="Are you sure delete this task?" okText="Yes" cancelText="No">
+                  <Popconfirm title="Are you sure delete this task?" okText="Yes" cancelText="No" onConfirm={()=>this.onTodoDelete(todo.orderId)}>
                     <Button
                       icon
                       color="red"
-                      onClick={() => this.onTodoDelete(todo.todoId)}
                     >
                       <Icon name="delete" />
                     </Button>

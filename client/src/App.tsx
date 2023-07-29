@@ -4,11 +4,10 @@ import { Grid, Segment } from 'semantic-ui-react'
 import type { MenuProps, MenuTheme } from 'antd';
 import { Menu, Layout, Button } from 'antd';
 import Auth from './auth/Auth'
-import { EditTodo } from './components/EditTodo'
-import { LogIn } from './components/LogIn'
 import { NotFound } from './components/NotFound'
-import { Todos } from './components/Todos'
+import { Todos } from './components/Orders'
 import 'antd/dist/antd.css';
+import { EditOrder } from './components/EditOrder';
 export interface AppProps { }
 
 export interface AppProps {
@@ -113,7 +112,7 @@ export default class App extends Component<AppProps, AppState> {
           path="/todos/:todoId/edit"
           exact
           render={props => {
-            return <EditTodo {...props} history={this.props.history} auth={this.props.auth} />
+            return <EditOrder {...props} history={this.props.history} auth={this.props.auth} />
           }}
         />
 

@@ -1,7 +1,7 @@
-# TODO: Change the name of the org 
+
 org: hothanhnhank1c
-app: serverless-todo-app
-service: serverless-todo-app
+app: serverless-order-management-app
+service: serverless-order-management-app
 
 plugins:
   - serverless-reqvalidator-plugin
@@ -25,49 +25,53 @@ provider:
     lambda: true
     apiGateway: true
 
-  # Use these variables in the functions and resouorces section below. For example, 
-  # ${self:provider.environment.ATTACHMENT_S3_BUCKET}
   environment:
-    TODOS_TABLE: Todos-${self:provider.stage}
-    TODOS_CREATED_AT_INDEX: CreatedAtIndex
-    ATTACHMENT_S3_BUCKET: hothanhnhank1c-serverless-c4-todo-images-${self:provider.stage}
+    ORDERS_TABLE: Jobs-${self:provider.stage}
+    ORDERS_CREATED_AT_INDEX: CreatedAtIndex
+    ATTACHMENT_S3_BUCKET: hothanhnhank1c-serverless-order-management-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
-    IS_OFFLINE: false
+    IS_OFFLINE: true
 
   logs:
-    # Enable API Gateway logs
     restApi: true
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - xray:PutTelemetryRecords
+            - xray:PutTraceSegments
+          Resource: "*"
 
 custom:
   serverless-offline:
-    httpPort: 3000
+    httpPort: 8082
   dynamodb:
     start:
       port: 8001
       inMemory: true
       migrate: true
-    stages: # Add this section of the config
+    stages: 
       - dev
   documentation: 
     api: 
       info: 
         version: v1.0.0
-        title: Todo API
-        description: Udacity Serverless Todo
+        title: Order Management API
+        description: Serverless Order Management
     models: 
-      - name: CreateRequest
+      - name: CreateOrder
         contentType: application/json
-        schema: ${file(models/create-todo-model.json)}
-      - name: UpdateRequest
+        schema: ${file(modelsValidator/create-order-model.json)}
+      - name: UpdateOrder
         contentType: application/json
-        schema: ${file(models/update-todo-model.json)}
+        schema: ${file(modelsValidator/update-order-model.json)}
 functions:
 
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
-  # TODO: Configure this function - 
-  # Provide iamRoleStatements property for performing Actions on DynamoDB
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -75,14 +79,14 @@ functions:
           - dynamodb:GetItem
           - dynamodb:UpdateItem
           - dynamodb:PutItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
   # Provide 
-  GetTodos:
-    handler: src/lambda/http/getTodos.handler
+  GetOrders:
+    handler: src/lambda/http/getOrders.handler
     events:
       - http:
           method: get
-          path: todos
+          path: orders
           cors:
             origin: '*'
           authorizer: Auth
@@ -96,26 +100,23 @@ functions:
         - Effect: Allow
           Action:
             - dynamodb:Query
-          Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
-  # TODO: Configure this function - 
-  # Provide iamRoleStatements property. Decide the Actions and AWS Resource. 
-  # To refer to an AWS resource defined in the "Resources" section, you can use "Resource: !GetAtt <resource-name>.Arn"
-  # To validate incoming HTTP requests, we have provided the request schemas in function definition below. 
-  CreateTodo:
-    handler: src/lambda/http/createTodo.handler
+          Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
+
+  CreateOrder:
+    handler: src/lambda/http/createOrder.handler
     events:
       - http:
           method: post
-          path: todos
+          path: orders
           cors: 
             origin: '*'
           authorizer: Auth
           reqValidatorName: Validator
           documentation: 
-            summary: Create a Todo
-            description: Create a Todo
+            summary: Create a Job
+            description: Create a Job
             requestModels: 
-              'application/json': CreateRequest
+              'application/json': CreateOrder
     iamRoleStatements:
       - Effect: Allow 
         Action:
@@ -126,25 +127,23 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:PutItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
 
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements, and request schemas
-  UpdateTodo:
-    handler: src/lambda/http/updateTodo.handler
+  UpdateOrder:
+    handler: src/lambda/http/updateOrder.handler
     events:
       - http:
           method: patch
-          path: todos/{todoId}
+          path: orders/{orderId}
           cors:
             origin: '*'
           authorizer: Auth
           reqValidatorName: Validator
           documentation: 
-            summary: update todo
-            description: Update toto
+            summary: update order
+            description: Update order
             requestModels: 
-              'application/json': UpdateRequest
+              'application/json': UpdateOrder
     iamRoleStatements:
       - Effect: Allow 
         Action:
@@ -155,15 +154,14 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:UpdateItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements
-  DeleteTodo:
-    handler: src/lambda/http/deleteTodo.handler
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
+
+  DeleteOrder:
+    handler: src/lambda/http/deleteOrder.handler
     events:
       - http:
           method: delete
-          path: todos/{todoId}
+          path: orders/{orderId}
           cors:
             origin: '*'
           authorizer: Auth
@@ -177,16 +175,14 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:DeleteItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
 
-  # TODO: Configure this function
-  # Provide property for setting up CORS, Authorizer, iamRoleStatements
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
     events:
       - http:
           method: post
-          path: todos/{todoId}/attachment
+          path: orders/{orderId}/attachment
           cors:
             origin: '*'
           authorizer: Auth
@@ -205,7 +201,7 @@ functions:
       - Effect: Allow
         Action:
           - dynamodb:UpdateItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.ORDERS_TABLE}
 resources:
   Resources:
     Validator:
@@ -216,9 +212,7 @@ resources:
           Ref: ApiGatewayRestApi
         ValidateRequestBody: true
         ValidateRequestParameters: false
-    # Add necessary AWS resources. You will need at least the following AWS resources
-    # TODO: Fill the properties
-    # Feel free to change the names as you like. 
+
     GatewayResponseDefault4XX:
       Type: AWS::ApiGateway::GatewayResponse
       Properties:
@@ -231,34 +225,33 @@ resources:
           Ref: 'ApiGatewayRestApi'
 
     # TODO: Create a DynamoDB table with local secondary index and a composite key
-    TodosTable:
+    OrdersTable:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
           - AttributeName: userId
             AttributeType: S
-          - AttributeName: todoId
+          - AttributeName: orderId
             AttributeType: S
           - AttributeName: createdAt
             AttributeType: S
         KeySchema:
           - AttributeName: userId
             KeyType: HASH
-          - AttributeName: todoId
+          - AttributeName: orderId
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.TODOS_TABLE}
+        TableName: ${self:provider.environment.ORDERS_TABLE}
         LocalSecondaryIndexes:
-          - IndexName: ${self:provider.environment.TODOS_CREATED_AT_INDEX}
+          - IndexName: ${self:provider.environment.ORDERS_CREATED_AT_INDEX}
             KeySchema:
               - AttributeName: userId
                 KeyType: HASH
               - AttributeName: createdAt
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL # What attributes will be copied to an index
-    # TODO: Complete the bucket properties below. 
-    # Do not forget to add the CorsConfiguration propoerty
+              ProjectionType: ALL 
+
     AttachmentsBucket:
       Type: AWS::S3::Bucket
       Properties:
@@ -285,8 +278,6 @@ resources:
                 - HEAD
               MaxAge: 3000
 
-    # TODO: Complete the policy below and attach it to the bucket defined above
-    # For cross referencing the name of the bucket, use "!Ref AttachmentsBucket"
     BucketPolicy:
       Type: AWS::S3::BucketPolicy
       Properties:

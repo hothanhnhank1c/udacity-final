@@ -4,21 +4,23 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import * as middy from 'middy'
 import { cors, httpErrorHandler } from 'middy/middlewares'
 
-import { deleteTodo } from '../../businessLogic/todos'
+import { deleteOrder } from '../../businessLogic/orders'
 import { getUserId } from '../utils'
+import { stringify } from 'querystring'
 
 export const handler = middy(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const todoId = event.pathParameters.todoId;
+    const orderId = event.pathParameters.orderId;
     const userId = getUserId(event);
-    // TODO: Remove a TODO item by id
-    deleteTodo(userId, todoId)
+    deleteOrder(userId, orderId)
     return {
       statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*'
       },
-      body: ""
+      body: stringify({
+        msg:" delete success"
+      })
     }
   }
 )

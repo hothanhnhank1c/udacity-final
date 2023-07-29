@@ -4,26 +4,27 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import * as middy from 'middy'
 import { cors } from 'middy/middlewares'
 
-import { getTodosForUser as getTodosForUser } from '../../businessLogic/todos';
+import { getOrdersForUser as getOrdersForUser } from '../../businessLogic/orders';
 import { getUserId } from '../utils';
+import { Result } from '../../models/Result';
 
-// TODO: Get all TODO items for a current user
 export const handler = middy(
   async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    // Write your code here
     const userId = getUserId(event);
-    const {toDoName} = event.queryStringParameters;
-    const todos = await getTodosForUser(userId, toDoName)
+    let {orderName,limit, nextKey} = event.queryStringParameters;
+    if (!nextKey) {
+      nextKey = undefined;
+    } else {
+      const uriDecoded = decodeURIComponent(nextKey)
+      nextKey =  JSON.parse(uriDecoded)
+    }
+    const result:Result = await getOrdersForUser(userId, orderName, parseInt(limit),nextKey)
     return {
       statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify(
-        {
-          items: todos
-        }
-      )
+      body: JSON.stringify(result)
     }
   }
 );

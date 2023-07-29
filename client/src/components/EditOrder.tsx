@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { Form, Button } from 'semantic-ui-react'
 import Auth from '../auth/Auth'
-import { getUploadUrl, patchTodo, uploadFile } from '../api/todos-api'
-import {  Modal, Input, message, Alert, Spin, Space, Card, Upload, Checkbox, Popconfirm } from 'antd';
+import { getUploadUrl, uploadFile } from '../api/orders-api'
+import {  message, } from 'antd';
 enum UploadState {
   NoUpload,
   FetchingPresignedUrl,
@@ -24,7 +24,7 @@ interface EditTodoState {
   uploadState: UploadState
 }
 
-export class EditTodo extends React.PureComponent<
+export class EditOrder extends React.PureComponent<
   EditTodoProps,
   EditTodoState
 > {
